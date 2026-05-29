@@ -312,13 +312,13 @@ async function initLive2D() {
     });
 
     try {
-        // Load model anime "Hiyori" dari public library (Kualitas tinggi, fokus wajah)
-        live2dModel = await PIXI.live2d.Live2DModel.from('https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/hiyori/hiyori_pro_t10.model3.json');
+        // Load model anime "Haru" dari public library (Kualitas tinggi, fokus wajah)
+        live2dModel = await PIXI.live2d.Live2DModel.from('https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/haru/haru_greeter_t03.model3.json');
         app.stage.addChild(live2dModel);
         
         // Sesuaikan ukuran agar zoom ke wajah
         live2dModel.scale.set(0.65); // Zoom lebih besar
-        live2dModel.x = -80; // Geser ke tengah
+        live2dModel.x = 0; // Geser ke tengah
         live2dModel.y = -100; // Geser ke atas agar fokus ke wajah
     } catch(e) {
         console.log("Error loading Live2D:", e);
