@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Avatar App</title>
+    <style>
+/* Variabel CSS & Reset */
+:root {
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --text-color: #ffffff;
+    --primary-color: #00e5ff;
+    --accent-color: #ff4081;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body, html {
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden; /* Mencegah scroll, behavior layaknya app native */
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Status Bar */
+.status-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.5);
+    font-size: 14px;
+    z-index: 10;
+}
+
+/* Area Avatar */
+.avatar-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.avatar-mode {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+}
+
+.avatar-mode.hidden {
+    display: none;
+}
+
+/* CSS Avatar Sederhana (Fullscreen Mode) */
+.css-face-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.css-face {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+    background: url('seiya.png') center 40% / 220% no-repeat;
+    position: relative;
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(0, 229, 255, 0.2);
+}
+
+.eyes {
+    display: none; 
+}
+
+.mouth {
+    width: 30%; /* Lebih lebar karena di-zoom */
+    height: 3.5%;
+    background: #220505;
+    border-radius: 10px;
+    position: absolute;
+    top: 86%; /* Turun karena wajah di-zoom dari atas */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: height 0.1s;
+}
+
+/* Animasi saat bicara (di-trigger via JS) */
+.mouth.talking {
+    height: 8%;
+    animation: talk 0.15s infinite alternate;
+}
+
+@keyframes talk {
+    0% { height: 3.5%; }
+    100% { height: 10%; }
+}
+
+/* Live2D Canvas Placeholder */
+#live2d-canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(255, 64, 129, 0.2);
+}
+
+.placeholder-text {
+    position: absolute;
+    color: #888;
+}
+
+/* Subtitle Box */
+.subtitle-box {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px 25px;
+    border-radius: 30px;
+    margin-top: 20px;
+    max-width: 80%;
+    text-align: center;
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-height: 50px;
+}
+
+/* Footer / Controls */
+.controls-area {
+    padding: 20px;
+    background: var(--card-bg);
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.stt-status {
+    font-size: 12px;
+    color: #aaa;
+    height: 15px;
+}
+
+.mic-button {
+    background: var(--primary-color);
+    color: #000;
+    border: none;
+    border-radius: 50px;
+    padding: 15px 40px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(0, 229, 255, 0.4);
+    transition: transform 0.2s;
+}
+
+.mic-button:active {
+    transform: scale(0.95);
+}
+
+.mic-button.listening {
+    background: var(--accent-color);
+    box-shadow: 0 5px 15px rgba(255, 64, 129, 0.4);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.mode-toggles {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.btn-small {
+    background: transparent;
+    color: #aaa;
+    border: 1px solid #555;
+    padding: 5px 15px;
+    border-radius: 15px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-small.active {
+    background: #333;
+    color: #fff;
+    border-color: #888;
+}
+    </style>
+</head>
+<body>
+    
+    <!-- Kontainer Aplikasi Utama -->
+    <div class="app-container">
+        
+        <!-- Header / Status Bar -->
+        <header class="status-bar">
+            <div class="battery-status">🔋 <span id="battery-level">100%</span></div>
+            <div class="clock"><span id="time-display">00:00</span></div>
+            <div class="connection-status" id="connection-indicator">🌐 Online</div>
+        </header>
+
+        <!-- Area Avatar -->
+        <main class="avatar-area">
+            
+            <!-- Mode 1: CSS/SVG Avatar (Simple Mode) -->
+            <div id="avatar-simple" class="avatar-mode active">
+                <div class="css-face-wrapper">
+                    <div class="css-face">
+                        <div class="eyes">
+                            <div class="eye left"></div>
+                            <div class="eye right"></div>
+                        </div>
+                        <div class="mouth" id="css-mouth"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mode 2: Live2D / 3D Canvas (Keren Mode) -->
+            <div id="avatar-keren" class="avatar-mode hidden">
+                <!-- Canvas ini nanti diisi oleh Live2D Web SDK -->
+                <canvas id="live2d-canvas"></canvas>
+                <div class="placeholder-text">Live2D Mode Keren (Loading...)</div>
+            </div>
+
+            <!-- Teks Subtitle / Ucapan Avatar -->
+            <div class="subtitle-box">
+                <p id="avatar-speech">Halo, saya siap membantu!</p>
+            </div>
+            
+        </main>
+
+        <!-- Area Kontrol & Interaksi -->
+        <footer class="controls-area">
+            <div class="stt-status" id="stt-status">Menunggu suara...</div>
+            
+            <button id="btn-mic" class="mic-button">
+                🎙️ Tap to Speak
+            </button>
+            
+            <div class="mode-toggles">
+                <button id="btn-mode-simple" class="btn-small active">Mode Simple</button>
+                <button id="btn-mode-keren" class="btn-small">Mode Keren</button>
+                <button id="btn-sync" class="btn-small">🔄 Sync Data</button>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Library Live2D & PixiJS untuk Mode Keren -->
+    <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script> <!-- Untuk Cubism 2 -->
+    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script> <!-- Untuk Cubism 4 -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.2/dist/browser/pixi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/index.min.js"></script>
+
+    <script>
+/**
+ * LOGIKA UTAMA APLIKASI AI AVATAR
+ */
+
+// Element UI
+const timeDisplay = document.getElementById('time-display');
+const batteryLevel = document.getElementById('battery-level');
+const connectionIndicator = document.getElementById('connection-indicator');
+const avatarSpeech = document.getElementById('avatar-speech');
+const cssMouth = document.getElementById('css-mouth');
+
+const btnSimple = document.getElementById('btn-mode-simple');
+const btnKeren = document.getElementById('btn-mode-keren');
+const btnSync = document.getElementById('btn-sync');
+const avatarSimple = document.getElementById('avatar-simple');
+const avatarKeren = document.getElementById('avatar-keren');
+
+// Konfigurasi Database GAS
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxaghKyyLJY-XGfF2ZwWfk2QLxDbE7sq9qRJk_1lyxZFHkg5GGnfXpPfGEx-Oqs_G6a1w/exec";
+
+
+// Inisialisasi Live2D Engine
+let live2dModel = null;
+async function initLive2D() {
+    const canvas = document.getElementById('live2d-canvas');
+    const app = new PIXI.Application({
+        view: canvas,
+        transparent: true,
+        autoStart: true,
+        width: 800,
+        height: 800
+    });
+
+    try {
+        // Load model anime "Shizuku" dari public library
+        live2dModel = await PIXI.live2d.Live2DModel.from('https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/shizuku/shizuku.model.json');
+        app.stage.addChild(live2dModel);
+        
+        // Sesuaikan ukuran agar pas di layar
+        live2dModel.scale.set(0.35);
+        live2dModel.x = -50;
+        live2dModel.y = 50;
+    } catch(e) {
+        console.log("Error loading Live2D:", e);
+    }
+}
+initLive2D();
+
+// Mode Wajah
+function switchMode(mode) {
+    if (mode === 'simple') {
+        avatarSimple.classList.remove('hidden');
+        avatarKeren.classList.add('hidden');
+        btnSimple.classList.add('active');
+        btnKeren.classList.remove('active');
+    } else if (mode === 'keren') {
+        avatarSimple.classList.add('hidden');
+        avatarKeren.classList.remove('hidden');
+        btnSimple.classList.remove('active');
+        btnKeren.classList.add('active');
+    }
+}
+
+btnSimple.addEventListener('click', () => switchMode('simple'));
+btnKeren.addEventListener('click', () => switchMode('keren'));
+
+// Logika Sync Data dari GAS
+btnSync.addEventListener('click', async () => {
+    btnSync.textContent = "🔄 Loading...";
+    speak("Sedang menyinkronkan data dari database.");
+    try {
+        const response = await fetch(GAS_URL);
+        const data = await response.json();
+        
+        // Simpan data ke memori lokal tablet agar bisa diakses offline!
+        localStorage.setItem('avatar_data', JSON.stringify(data));
+        
+        console.log("Data berhasil ditarik:", data);
+        speak("Data berhasil diperbarui.");
+        btnSync.textContent = "✅ Sukses";
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        speak("Gagal mengambil data. Pastikan internet menyala.");
+        btnSync.textContent = "❌ Gagal";
+    }
+    
+    // Kembalikan tombol ke teks asal setelah 3 detik
+    setTimeout(() => {
+        btnSync.textContent = "🔄 Sync Data";
+    }, 3000);
+});
+
+
+// Update Jam & Sapaan Awal
+function updateTime() {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    timeDisplay.textContent = `${hours}:${minutes}`;
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+// Cek Baterai
+if ('getBattery' in navigator) {
+    navigator.getBattery().then(function(battery) {
+        function updateBattery() {
+            batteryLevel.textContent = `${Math.round(battery.level * 100)}%`;
+        }
+        updateBattery();
+        battery.addEventListener('levelchange', updateBattery);
+    });
+}
+
+// Fitur TTS (Text to Speech) - Berbicara
+function speak(text) {
+    avatarSpeech.textContent = text;
+    
+    // Animasi mulut buka tutup (mode simple)
+    cssMouth.classList.add('talking');
+    
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'id-ID'; // Bahasa Indonesia
+        
+        // Lip sync sederhana untuk Live2D
+        let lipSyncInterval;
+        if (live2dModel) {
+            let mouthOpen = 0;
+            lipSyncInterval = setInterval(() => {
+                mouthOpen = mouthOpen === 0 ? 1 : 0; // Buka tutup
+                if (live2dModel.internalModel.coreModel.setParameterValueById) {
+                    live2dModel.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', mouthOpen);
+                } else if (live2dModel.internalModel.coreModel.setParamFloat) {
+                    live2dModel.internalModel.coreModel.setParamFloat('PARAM_MOUTH_OPEN_Y', mouthOpen);
+                }
+            }, 100);
+        }
+
+        utterance.onend = function() {
+            cssMouth.classList.remove('talking');
+            if (live2dModel) {
+                clearInterval(lipSyncInterval);
+                if (live2dModel.internalModel.coreModel.setParameterValueById) {
+                    live2dModel.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', 0); // Tutup mulut
+                } else if (live2dModel.internalModel.coreModel.setParamFloat) {
+                    live2dModel.internalModel.coreModel.setParamFloat('PARAM_MOUTH_OPEN_Y', 0);
+                }
+            }
+        };
+        
+        window.speechSynthesis.speak(utterance);
+    } else {
+        setTimeout(() => cssMouth.classList.remove('talking'), 2000);
+    }
+}
+
+// Logika STT (Speech to Text) & Otak AI
+const btnMic = document.getElementById('btn-mic');
+const sttStatus = document.getElementById('stt-status');
+
+// Inisialisasi Web Speech API
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition;
+let isRecognizing = false;
+
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID'; // Bahasa Indonesia
+    recognition.interimResults = false;
+    
+    recognition.onstart = function() {
+        isRecognizing = true;
+        btnMic.classList.add('listening');
+        btnMic.innerHTML = '🔴 Mendengarkan...';
+        sttStatus.textContent = 'Silakan bicara...';
+    };
+    
+    recognition.onresult = function(event) {
+        const text = event.results[0][0].transcript.toLowerCase();
+        sttStatus.textContent = `Anda: "${text}"`;
+        prosesPertanyaan(text); // Masukkan ke Otak AI
+    };
+    
+    recognition.onerror = function(event) {
+        isRecognizing = false;
+        sttStatus.textContent = 'Error mic: ' + event.error;
+        resetMic();
+    };
+    
+    recognition.onend = function() {
+        isRecognizing = false;
+        resetMic();
+    };
+} else {
+    sttStatus.textContent = 'Browser ini tidak mendukung Voice Recognition.';
+}
+
+function resetMic() {
+    isRecognizing = false;
+    btnMic.classList.remove('listening');
+    btnMic.innerHTML = '🎙️ Tap to Speak';
+}
+
+btnMic.addEventListener('click', () => {
+    if (recognition) {
+        if (!isRecognizing) {
+            try {
+                // Langsung ubah UI agar merespon
+                isRecognizing = true;
+                btnMic.classList.add('listening');
+                btnMic.innerHTML = '🔴 Memulai Mic...';
+                
+                recognition.start();
+            } catch(e) {
+                console.log("Mic error:", e);
+                isRecognizing = false;
+                resetMic();
+                if (window.location.protocol === 'file:') {
+                    alert("TIDAK BISA MEREKAM: Browser memblokir akses Microphone karena file dibuka secara lokal (file:///). Anda harus menggunakan localhost atau HTTPS.");
+                }
+            }
+        } else {
+            recognition.stop();
+            resetMic();
+        }
+    }
+});
+
+// Otak AI: Memproses Pertanyaan dan Mencari Jawaban di LocalStorage
+function prosesPertanyaan(pertanyaan) {
+    // Ambil data dari LocalStorage
+    const rawData = localStorage.getItem('avatar_data');
+    if (!rawData) {
+        speak("Maaf brow, data belum disinkronisasi. Tolong klik Sync Data dulu ya.");
+        return;
+    }
+    
+    const db = JSON.parse(rawData);
+    
+    // 1. Cek Ganti Mode Wajah
+    if (pertanyaan.includes("mode keren") || pertanyaan.includes("wajah keren")) {
+        speak("Siap, mengganti ke mode keren!");
+        switchMode('keren');
+        return;
+    } else if (pertanyaan.includes("mode simple") || pertanyaan.includes("wajah simple")) {
+        speak("Kembali ke mode simple.");
+        switchMode('simple');
+        return;
+    }
+    
+    // 2. Cek Baca Teks Penting (Pancasila / Trisandya)
+    if (pertanyaan.includes("pancasila") || pertanyaan.includes("dasar negara")) {
+        speak(db.teks[0].Teks); // Baca Pancasila
+        return;
+    } else if (pertanyaan.includes("trisandya") || pertanyaan.includes("doa")) {
+        speak(db.teks[1].Teks); // Baca Trisandya
+        return;
+    }
+    
+    // 3. Cek Minta Cerita
+    if (pertanyaan.includes("cerita") || pertanyaan.includes("dongeng")) {
+        // Ambil cerita random
+        const index = Math.floor(Math.random() * db.cerita.length);
+        const ceritaPilihan = db.cerita[index];
+        speak(`Ini cerita tentang ${ceritaPilihan.Judul}. ${ceritaPilihan.Isi_Cerita} Intisarinya adalah: ${ceritaPilihan.Intisari}`);
+        return;
+    }
+    
+    // 4. Cek Jokes / Tebak-tebakan
+    if (pertanyaan.includes("lucu") || pertanyaan.includes("joke") || pertanyaan.includes("tebak")) {
+        const index = Math.floor(Math.random() * db.jokes.length);
+        const jokePilihan = db.jokes[index];
+        speak(`${jokePilihan.Pertanyaan} ... Jawabannya adalah: ${jokePilihan.Jawaban}`);
+        return;
+    }
+    
+    // 5. Default jika tidak mengerti
+    speak("Maaf, saya tidak menemukan jawaban untuk itu di database saya.");
+}
+
+// Sapaan awal saat web diload
+window.onload = () => {
+    // Memberi jeda sedikit sebelum ngomong
+    setTimeout(() => {
+        const jam = new Date().getHours();
+        let sapaan = "Halo";
+        if (jam >= 5 && jam < 11) sapaan = "Selamat pagi";
+        else if (jam >= 11 && jam < 15) sapaan = "Selamat siang";
+        else if (jam >= 15 && jam < 18) sapaan = "Selamat sore";
+        else sapaan = "Selamat malam";
+        
+        speak(`${sapaan} brow! Saya siap membantu.`);
+    }, 1000);
+}
+    </script>
+</body>
+</html>
